@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>My Account</title>
+<script src="config.js"></script>
+<script src="accounts.js"></script>
+</head>
+<body>
+<p><a href="index.html">RS Classic Continuum accounts</a> | <a href="signup.html">Create account</a> | <a href="signin.html">Sign in</a> | <a href="account.html">My account</a> | <a href="forgot.html">Forgot password</a> | <a href="privacy.html">Privacy</a></p>
+<hr>
+<h1>My account</h1>
+<p id="status" role="status">Loading...</p>
+
+<div id="signedin" hidden>
+  <p id="banner" role="alert" hidden></p>
+  <table border="1" cellpadding="4">
+    <tr><th align="left">Character</th><td id="f-name"></td></tr>
+    <tr><th align="left">Combat level</th><td id="f-combat"></td></tr>
+    <tr><th align="left">Total level</th><td id="f-total"></td></tr>
+    <tr><th align="left">Last played</th><td id="f-last"></td></tr>
+    <tr><th align="left">Online now</th><td id="f-online"></td></tr>
+    <tr><th align="left">Email</th><td id="f-email"></td></tr>
+    <tr id="sub-row"><th align="left">Subscription</th><td id="f-sub"></td></tr>
+  </table>
+
+  <h2>Change password</h2>
+  <form id="password">
+    <p><label>Current password<br><input id="current" type="password" autocomplete="current-password" maxlength="20" required></label></p>
+    <p><label>New password<br><input id="new1" type="password" autocomplete="new-password" maxlength="20" required></label></p>
+    <p><label>New password again<br><input id="new2" type="password" autocomplete="new-password" maxlength="20" required></label></p>
+    <p><button type="submit">Change password</button></p>
+  </form>
+  <p id="password-result" role="status"></p>
+
+  <h2 id="email-heading">Change email</h2>
+  <form id="email">
+    <p><label>Email<br><input id="email-new" type="email" autocomplete="email" maxlength="254" required></label></p>
+    <p><label>Current password<br><input id="email-current" type="password" autocomplete="current-password" maxlength="20" required></label></p>
+    <p><button type="submit">Save and send confirmation link</button></p>
+  </form>
+  <p id="email-result" role="status"></p>
+
+  <h2>Sign out</h2>
+  <p><button id="signout" type="button">Sign out</button>
+     <button id="signout-all" type="button">Sign out everywhere</button></p>
+  <p><small>"Sign out everywhere" signs out every browser and launcher signed in to this character.</small></p>
+</div>
+
+<p id="signedout" hidden><a href="signin.html">Sign in</a> or <a href="signup.html">create an account</a>.</p>
+<pre id="errors" hidden></pre>
+<script>
+function showSignedOut(words) {
+  Accounts.forget();
+  Accounts.say('status', words);
+  document.getElementById('signedin').hidden = true;
+  document.getElementById('signedout').hidden = false;
+}
+
+function load() {
+  if (!Accounts.token()) {
+    showSignedOut('You are not signed in.');
+    return Promise.resolve();
+  }
+  return Accounts.call('GET', '/api/account', undefined, true).then(function (r) {
+    if (r.status === 401) { showSignedOut('You are signed out. Sign in again.'); return; }
+    if (r.status !== 200) { Accounts.say('status', r.body.error || ('Could not load the account (' + r.status + ').')); return; }
+    var a = r.body;
+    Accounts.say('status', 'Signed in as ' + a.name + '.');
+    Accounts.say('f-name', a.name);
+    Accounts.say('f-combat', a.combat);
+    Accounts.say('f-total', a.totalLevel);
+    Accounts.say('f-last', Accounts.date(a.lastLogin));
+    Accounts.say('f-online', a.online ? 'yes' : 'no');
+    Accounts.say('f-email', a.email ? a.email + (a.emailVerified ? ' (confirmed)' : ' (not confirmed yet)') : 'none');
+
+    // LCH-020: free accounts see Subscribe; subscribers see their date. Until payments exist
+    // (config.js ACCOUNTS_SUBSCRIBE), a free account sees no subscription row at all.
+    var sub = document.getElementById('f-sub');
+    sub.textContent = '';
+    document.getElementById('sub-row').hidden = !a.subscriber && !window.ACCOUNTS_SUBSCRIBE;
+    if (a.subscriber) {
+      sub.textContent = 'Subscriber until ' + Accounts.date(a.subscribedUntil);
+    } else {
+      sub.appendChild(document.createTextNode('Free. '));
+      var link = document.createElement('a');
+      link.href = 'subscribe.html';
+      link.id = 'subscribe-link';
+      link.textContent = 'Subscribe';
+      sub.appendChild(link);
+    }
+
+    // LCH-019: a character with no email, or one never confirmed, is told why it matters.
+    var banner = document.getElementById('banner');
+    if (!a.email) {
+      banner.textContent = 'Add an email so you can reset your password.';
+      banner.hidden = false;
+      Accounts.say('email-heading', 'Add an email');
+    } else if (!a.emailVerified && !Accounts.mail()) {
+      banner.hidden = true;
+      Accounts.say('email-heading', 'Change email');
+    } else if (!a.emailVerified) {
+      banner.textContent = 'Your email is not confirmed yet. Open the link we sent, or save it again below to send a new link.';
+      banner.hidden = false;
+      Accounts.say('email-heading', 'Change email');
+    } else {
+      banner.hidden = true;
+      Accounts.say('email-heading', 'Change email');
+    }
+    document.getElementById('signedin').hidden = false;
+    document.getElementById('signedout').hidden = true;
+  });
+}
+
+Accounts.onSubmit('password', function () {
+  if (Accounts.value('new1') !== Accounts.value('new2')) {
+    Accounts.say('password-result', 'The two new passwords are different.');
+    return;
+  }
+  return Accounts.call('POST', '/api/password',
+    { current: Accounts.value('current'), password: Accounts.value('new1') }, true).then(function (r) {
+    Accounts.say('password-result', r.status === 200
+      ? 'Password changed. Other devices have been signed out; this one stays signed in.'
+      : (r.body.error || ('Failed (' + r.status + ').')));
+    if (r.status === 200) { document.getElementById('password').reset(); }
+  });
+});
+
+Accounts.onSubmit('email', function () {
+  return Accounts.call('POST', '/api/email',
+    { email: Accounts.value('email-new'), current: Accounts.value('email-current') }, true).then(function (r) {
+    Accounts.say('email-result', r.status === 200
+      ? (r.body.emailSent ? 'Saved. We sent a confirmation link to the new address.'
+         : !Accounts.mail() ? 'Saved. Email confirmation opens soon.'
+                            : 'Saved, but the confirmation email could not be sent. Try again later.')
+      : (r.body.error || ('Failed (' + r.status + ').')));
+    if (r.status === 200) { document.getElementById('email').reset(); return load(); }
+  });
+});
+
+document.getElementById('signout').addEventListener('click', function () {
+  // The token is read when the call starts; forget it at once so this browser
+  // is signed out even if the server cannot be reached.
+  var done = Accounts.call('POST', '/api/signout', {}, true);
+  Accounts.forget();
+  done.then(function () {
+    showSignedOut('You are signed out.');
+  });
+});
+
+document.getElementById('signout-all').addEventListener('click', function () {
+  var done = Accounts.call('POST', '/api/signout-all', {}, true);
+  Accounts.forget();
+  done.then(function (r) {
+    showSignedOut(r.status === 200 ? 'You are signed out everywhere.' : (r.body.error || 'Signed out here.'));
+  });
+});
+
+load();
+</script>
+</body>
+</html>

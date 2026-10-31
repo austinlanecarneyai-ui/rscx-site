@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Forgot Password</title>
+<script src="config.js"></script>
+<script src="accounts.js"></script>
+</head>
+<body>
+<p><a href="index.html">RS Classic Continuum accounts</a> | <a href="signup.html">Create account</a> | <a href="signin.html">Sign in</a> | <a href="account.html">My account</a> | <a href="forgot.html">Forgot password</a> | <a href="privacy.html">Privacy</a></p>
+<hr>
+<h1>Forgot password</h1>
+<p id="intro">Enter your character name and its confirmed email. We will send a link to choose a new password.</p>
+<p id="nomail" hidden>Reset emails are not switched on yet. Until they are, email
+<a href="mailto:support@rsclassic-continuum.com">support@rsclassic-continuum.com</a> with your character name
+and the email on it, and we will send you a link to choose a new password.</p>
+<form id="forgot">
+  <p><label>Character name<br><input id="name" autocomplete="username" maxlength="12" required></label></p>
+  <p><label>Email<br><input id="email" type="email" autocomplete="email" maxlength="254" required></label></p>
+  <p><button type="submit">Send reset link</button></p>
+</form>
+<p id="result" role="status"></p>
+<p>No email on your character, or it was never confirmed? Ask the server's operator to reset it.</p>
+<pre id="errors" hidden></pre>
+<script>
+if (!Accounts.mail()) {
+  document.getElementById('intro').hidden = true;
+  document.getElementById('forgot').hidden = true;
+  document.getElementById('nomail').hidden = false;
+}
+Accounts.onSubmit('forgot', function () {
+  Accounts.say('result', 'Sending...');
+  return Accounts.call('POST', '/api/forgot', {
+    name: Accounts.value('name'),
+    email: Accounts.value('email')
+  }).then(function (r) {
+    Accounts.say('result', r.status === 200 ? r.body.message : (r.body.error || ('Failed (' + r.status + ').')));
+  });
+});
+</script>
+</body>
+</html>

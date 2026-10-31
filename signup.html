@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Create Account</title>
+<script src="config.js"></script>
+<script src="accounts.js"></script>
+</head>
+<body>
+<p><a href="index.html">RS Classic Continuum accounts</a> | <a href="signup.html">Create account</a> | <a href="signin.html">Sign in</a> | <a href="account.html">My account</a> | <a href="forgot.html">Forgot password</a> | <a href="privacy.html">Privacy</a></p>
+<hr>
+<h1>Create account</h1>
+<p>This makes your character. Its name and password are what you sign in with everywhere.</p>
+<form id="signup">
+  <p><label>Character name<br><input id="name" autocomplete="username" maxlength="12" required></label><br>
+  <small>2 to 12 letters, numbers and single spaces.</small></p>
+  <p><label>Password<br><input id="password" type="password" autocomplete="new-password" maxlength="20" required></label><br>
+  <small>8 to 20 characters.</small></p>
+  <p><label>Password again<br><input id="password2" type="password" autocomplete="new-password" maxlength="20" required></label></p>
+  <p><label>Email<br><input id="email" type="email" autocomplete="email" maxlength="254" required></label><br>
+  <small>For resetting a forgotten password. See <a href="privacy.html">privacy</a>.</small></p>
+  <p><label><input id="age" type="checkbox" required> I am 13 or older</label></p>
+  <p><button type="submit">Create account</button></p>
+</form>
+<p id="result" role="status"></p>
+<p id="next" hidden><a href="signin.html">Sign in now</a></p>
+<pre id="errors" hidden></pre>
+<script>
+Accounts.onSubmit('signup', function () {
+  if (Accounts.value('password') !== Accounts.value('password2')) {
+    Accounts.say('result', 'The two passwords are different.');
+    return;
+  }
+  Accounts.say('result', 'Creating...');
+  return Accounts.call('POST', '/api/signup', {
+    name: Accounts.value('name'),
+    password: Accounts.value('password'),
+    email: Accounts.value('email')
+  }).then(function (r) {
+    if (r.status === 201) {
+      Accounts.say('result', 'Account created: ' + r.body.name + '. '
+        + (r.body.emailSent ? 'We sent a link to your email - open it to confirm the address. '
+           : !Accounts.mail() ? 'Email confirmation opens soon; your email is saved. '
+                              : 'We could not send the confirmation email; you can send it again from your account. ')
+        + 'You can sign in and play now.');
+      document.getElementById('signup').hidden = true;
+      document.getElementById('next').hidden = false;
+    } else {
+      Accounts.say('result', r.body.error || ('Sign-up failed (' + r.status + ').'));
+    }
+  });
+});
+</script>
+</body>
+</html>
