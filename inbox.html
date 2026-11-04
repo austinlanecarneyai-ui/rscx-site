@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Inbox</title>
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" href="icon.png" type="image/png">
+<script src="config.js"></script>
+<script src="accounts.js"></script>
+</head>
+<body>
+<p><a href="index.html">RS Classic Continuum accounts</a> | <a href="signup.html">Create account</a> | <a href="signin.html">Sign in</a> | <a href="account.html">My account</a> | <a href="forgot.html">Forgot password</a> | <a href="inbox.html">Inbox</a> | <a href="tickets.html">Support</a> | <a href="privacy.html">Privacy</a></p>
+<hr>
+<h1>Inbox</h1>
+<p id="status" role="status">Loading...</p>
+
+<!-- INB-015: the character's own messages. Every text is set with textContent; a link is followed only when it
+     is a page of this site. Each message deletes itself after 14 days; there is no way to keep one longer. -->
+<div id="signedin" hidden>
+  <p id="life"></p>
+  <p id="none" hidden>No messages.</p>
+  <div id="messages"></div>
+  <p id="bulk" hidden><button id="read-all" type="button">Mark all read</button>
+     <button id="delete-all" type="button">Delete all</button></p>
+  <p id="result" role="status"></p>
+</div>
+
+<p id="signedout" hidden><a href="signin.html">Sign in</a> to read your inbox.</p>
+<pre id="errors" hidden></pre>
+<script>
+var MAX_RUN = 24;
+var PAGE = /^[a-z]{1,20}\.html(\?id=[0-9]{1,12})?$/;
+
+// A long word would push the page sideways; the wireframe carries no styling (LCH-015), so it offers a break.
+function addText(parent, text) {
+  var parts = String(text).split(/(\s+)/);
+  for (var i = 0; i < parts.length; i++) {
+    var p = parts[i];
+    for (var at = 0; at < p.length; at += MAX_RUN) {
+      if (at > 0) { parent.appendChild(document.createElement('wbr')); }
+      parent.appendChild(document.createTextNode(p.substr(at, MAX_RUN)));
+    }
+  }
+}
+
+function addLines(parent, text) {
+  var lines = String(text).split('\n');
+  for (var i = 0; i < lines.length; i++) {
+    if (i > 0) { parent.appendChild(document.createElement('br')); }
+    addText(parent, lines[i]);
+  }
+}
+
+function showSignedOut(words) {
+  Accounts.forget();
+  Accounts.say('status', words);
+  document.getElementById('signedin').hidden = true;
+  document.getElementById('signedout').hidden = false;
+}
+
+function daysLeft(m, now) {
+  var d = Math.ceil((m.expiresAt - now) / 86400);
+  return d <= 1 ? 'Deletes itself within a day.' : 'Deletes itself in ' + d + ' days.';
+}
+
+function show(d) {
+  var box = document.getElementById('messages');
+  box.textContent = '';
+  document.getElementById('none').hidden = d.messages.length > 0;
+  document.getElementById('bulk').hidden = d.messages.length === 0;
+  Accounts.say('life', 'Messages delete themselves ' + d.lifeDays + ' days after they arrive.');
+  Accounts.say('status', d.unread ? d.unread + ' unread.' : '');
+  d.messages.forEach(function (m) {
+    var item = document.createElement('div');
+    item.id = 'message-' + m.id;
+    var head = document.createElement('h2');
+    addText(head, (m.read ? '' : 'New: ') + m.title);
+    item.appendChild(head);
+    var when = document.createElement('p');
+    when.appendChild(document.createTextNode(Accounts.date(m.at) + '. ' + daysLeft(m, d.now)));
+    item.appendChild(when);
+    var body = document.createElement('p');
+    body.className = 'body';
+    addLines(body, m.body);
+    item.appendChild(body);
+    var acts = document.createElement('p');
+    if (m.link && PAGE.test(m.link)) {
+      var a = document.createElement('a');
+      a.href = m.link;
+      a.textContent = m.link.indexOf('tickets.html') === 0 ? 'Open the ticket' : 'Open';
+      acts.appendChild(a);
+      acts.appendChild(document.createTextNode(' '));
+    }
+    if (!m.read) {
+      var r = document.createElement('button');
+      r.type = 'button';
+      r.className = 'read';
+      r.textContent = 'Mark read';
+      r.addEventListener('click', function () { change('/api/inbox/read', { id: m.id }, 'Marked read.'); });
+      acts.appendChild(r);
+      acts.appendChild(document.createTextNode(' '));
+    }
+    var del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'delete';
+    del.textContent = 'Delete';
+    del.addEventListener('click', function () { change('/api/inbox/delete', { id: m.id }, 'Deleted.'); });
+    acts.appendChild(del);
+    item.appendChild(acts);
+    item.appendChild(document.createElement('hr'));
+    box.appendChild(item);
+  });
+}
+
+function load() {
+  if (!Accounts.token()) {
+    showSignedOut('You are not signed in.');
+    return Promise.resolve();
+  }
+  return Accounts.call('GET', '/api/inbox', undefined, true).then(function (r) {
+    if (r.status === 401) { showSignedOut('You are signed out. Sign in again.'); return; }
+    if (r.status === 404) { Accounts.say('status', 'The inbox is not open on this server yet.'); return; }
+    if (r.status !== 200) { Accounts.say('status', r.body.error || ('Could not load your inbox (' + r.status + ').')); return; }
+    document.getElementById('signedin').hidden = false;
+    document.getElementById('signedout').hidden = true;
+    show(r.body);
+  });
+}
+
+function change(path, body, words) {
+  return Accounts.call('POST', path, body, true).then(function (r) {
+    if (r.status === 401) { showSignedOut('You are signed out. Sign in again.'); return; }
+    Accounts.say('result', r.status === 200 ? words : (r.body.error || ('Not done (' + r.status + ').')));
+    return load();
+  });
+}
+
+document.getElementById('read-all').addEventListener('click', function () {
+  change('/api/inbox/read', { all: true }, 'All marked read.');
+});
+document.getElementById('delete-all').addEventListener('click', function () {
+  if (window.confirm('Delete every message?')) { change('/api/inbox/delete', { all: true }, 'All deleted.'); }
+});
+
+load();
+</script>
+</body>
+</html>

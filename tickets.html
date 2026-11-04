@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Support</title>
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" href="icon.png" type="image/png">
+<script src="config.js"></script>
+<script src="accounts.js"></script>
+</head>
+<body>
+<p><a href="index.html">RS Classic Continuum accounts</a> | <a href="signup.html">Create account</a> | <a href="signin.html">Sign in</a> | <a href="account.html">My account</a> | <a href="forgot.html">Forgot password</a> | <a href="inbox.html">Inbox</a> | <a href="tickets.html">Support</a> | <a href="privacy.html">Privacy</a></p>
+<hr>
+<h1>Support</h1>
+<p id="status" role="status">Loading...</p>
+
+<!-- TKT-020: the character's own tickets, lodging one, and one ticket's thread. Every text is set with
+     textContent; nothing a player or the owner typed is ever parsed as markup. -->
+<div id="signedin" hidden>
+  <div id="list-view">
+    <h2>Your tickets</h2>
+    <p id="none" hidden>You have no tickets.</p>
+    <ul id="tickets"></ul>
+
+    <h2>Lodge a ticket</h2>
+    <form id="lodge">
+      <p><label>What is it about?<br><select id="category" required></select></label></p>
+      <p id="payment-row" hidden><label>Which payment?<br><select id="payment"></select></label></p>
+      <p><label>Subject<br><input id="subject" type="text" maxlength="80" required></label></p>
+      <p><label>Message<br><textarea id="body" rows="8" maxlength="2000" required></textarea></label></p>
+      <p><small id="limits"></small></p>
+      <p><button type="submit">Lodge ticket</button></p>
+    </form>
+    <p id="lodge-result" role="status"></p>
+  </div>
+
+  <div id="ticket-view" hidden>
+    <p><a href="tickets.html">Back to your tickets</a></p>
+    <h2 id="t-title"></h2>
+    <p id="t-meta"></p>
+    <p id="t-payment" hidden></p>
+    <div id="thread"></div>
+    <h2>Answer</h2>
+    <form id="reply">
+      <p><label>Message<br><textarea id="reply-body" rows="6" maxlength="2000" required></textarea></label></p>
+      <p><button type="submit">Send</button></p>
+    </form>
+    <p id="reply-result" role="status"></p>
+  </div>
+</div>
+
+<p id="signedout" hidden><a href="signin.html">Sign in</a> to see your tickets or lodge one.</p>
+<pre id="errors" hidden></pre>
+<script>
+var categories = [];
+var MAX_RUN = 24;
+
+// A long word with no spaces would push the page sideways; the page offers a break every
+// MAX_RUN characters with <wbr>, since the wireframe carries no styling (LCH-015).
+function addText(parent, text) {
+  var parts = String(text).split(/(\s+)/);
+  for (var i = 0; i < parts.length; i++) {
+    var p = parts[i];
+    for (var at = 0; at < p.length; at += MAX_RUN) {
+      if (at > 0) { parent.appendChild(document.createElement('wbr')); }
+      parent.appendChild(document.createTextNode(p.substr(at, MAX_RUN)));
+    }
+  }
+}
+
+// A message: its lines kept, each set as text.
+function addLines(parent, text) {
+  var lines = String(text).split('\n');
+  for (var i = 0; i < lines.length; i++) {
+    if (i > 0) { parent.appendChild(document.createElement('br')); }
+    addText(parent, lines[i]);
+  }
+}
+
+function setText(id, text) {
+  var el = document.getElementById(id);
+  el.textContent = '';
+  addText(el, text);
+}
+
+function showSignedOut(words) {
+  Accounts.forget();
+  Accounts.say('status', words);
+  document.getElementById('signedin').hidden = true;
+  document.getElementById('signedout').hidden = false;
+}
+
+function ticketId() {
+  var m = /[?&]id=([0-9]{1,12})(&|$)/.exec(window.location.search);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+function needsPayment() {
+  var id = Accounts.value('category');
+  for (var i = 0; i < categories.length; i++) {
+    if (categories[i].id === id) { return categories[i].payment; }
+  }
+  return false;
+}
+
+function showList(d) {
+  var list = document.getElementById('tickets');
+  list.textContent = '';
+  document.getElementById('none').hidden = d.tickets.length > 0;
+  d.tickets.forEach(function (t) {
+    var li = document.createElement('li');
+    li.id = 'ticket-' + t.id;
+    var a = document.createElement('a');
+    a.href = 'tickets.html?id=' + t.id;
+    addText(a, '#' + t.id + ' ' + t.subject);
+    li.appendChild(a);
+    addText(li, ' - ' + t.statusLabel + ' - ' + t.categoryLabel + ' - ' + Accounts.date(t.updatedAt));
+    list.appendChild(li);
+  });
+
+  categories = d.categories;
+  var cat = document.getElementById('category');
+  if (!cat.options.length) {
+    var pick = document.createElement('option');
+    pick.value = '';
+    pick.textContent = 'Choose one';
+    cat.appendChild(pick);
+    d.categories.forEach(function (c) {
+      var o = document.createElement('option');
+      o.value = c.id;
+      o.textContent = c.label;
+      cat.appendChild(o);
+    });
+  }
+  var pay = document.getElementById('payment');
+  pay.textContent = '';
+  var none = document.createElement('option');
+  none.value = '';
+  none.textContent = d.payments.length ? 'Not one of these' : 'No payments on this character';
+  pay.appendChild(none);
+  d.payments.forEach(function (p) {
+    var o = document.createElement('option');
+    o.value = p.ref;
+    o.textContent = p.label;
+    pay.appendChild(o);
+  });
+  document.getElementById('payment-row').hidden = !needsPayment();
+  Accounts.say('limits', 'Subject up to ' + d.limits.subject + ' characters, message up to ' + d.limits.message
+    + '. Up to ' + d.limits.unresolved + ' tickets open at once. No attachments. We answer here, and tell you in game.');
+}
+
+function showTicket(t) {
+  setText('t-title', '#' + t.id + ' ' + t.subject);
+  setText('t-meta', t.categoryLabel + ' - ' + t.statusLabel + ' - lodged ' + Accounts.date(t.createdAt));
+  var pay = document.getElementById('t-payment');
+  pay.hidden = !t.payment;
+  if (t.payment) { setText('t-payment', 'Payment: ' + t.payment); }
+  var thread = document.getElementById('thread');
+  thread.textContent = '';
+  t.thread.forEach(function (m, i) {
+    var head = document.createElement('p');
+    head.className = 'from-' + m.from;
+    var who = document.createElement('b');
+    who.textContent = m.from === 'support' ? 'Support' : 'You';
+    head.appendChild(who);
+    head.appendChild(document.createTextNode(' - ' + Accounts.date(m.at)));
+    var body = document.createElement('p');
+    body.id = 'message-' + i;
+    addLines(body, m.body);
+    thread.appendChild(head);
+    thread.appendChild(body);
+  });
+}
+
+function load() {
+  if (!Accounts.token()) {
+    showSignedOut('You are not signed in.');
+    return Promise.resolve();
+  }
+  var id = ticketId();
+  var path = id ? '/api/support/ticket?id=' + id : '/api/support/tickets';
+  return Accounts.call('GET', path, undefined, true).then(function (r) {
+    if (r.status === 401) { showSignedOut('You are signed out. Sign in again.'); return; }
+    if (r.status === 404 && !id) { Accounts.say('status', 'Support tickets are not open on this server yet.'); return; }
+    if (r.status !== 200) { Accounts.say('status', r.body.error || ('Could not load your tickets (' + r.status + ').')); return; }
+    document.getElementById('signedin').hidden = false;
+    document.getElementById('signedout').hidden = true;
+    document.getElementById('list-view').hidden = !!id;
+    document.getElementById('ticket-view').hidden = !id;
+    if (id) {
+      Accounts.say('status', r.body.yourTurn ? 'We replied. Answer below if you need to.' : '');
+      showTicket(r.body);
+    } else {
+      var waiting = r.body.tickets.filter(function (t) { return t.yourTurn; }).length;
+      Accounts.say('status', waiting ? waiting + ' of your tickets ' + (waiting === 1 ? 'has' : 'have') + ' a reply waiting for you.' : '');
+      showList(r.body);
+    }
+  });
+}
+
+document.getElementById('category').addEventListener('change', function () {
+  document.getElementById('payment-row').hidden = !needsPayment();
+});
+
+Accounts.onSubmit('lodge', function () {
+  var body = { category: Accounts.value('category'), subject: Accounts.value('subject'), body: Accounts.value('body') };
+  if (needsPayment() && Accounts.value('payment')) { body.payment = parseInt(Accounts.value('payment'), 10); }
+  return Accounts.call('POST', '/api/support/lodge', body, true).then(function (r) {
+    if (r.status === 201) {
+      document.getElementById('lodge').reset();
+      document.getElementById('payment-row').hidden = true;
+      Accounts.say('lodge-result', 'Ticket #' + r.body.id + ' lodged. We will reply here, and tell you in game.');
+      return load();
+    }
+    if (r.status === 401) { showSignedOut('You are signed out. Sign in again.'); return; }
+    Accounts.say('lodge-result', r.body.error || ('Not lodged (' + r.status + ').'));
+  });
+});
+
+Accounts.onSubmit('reply', function () {
+  return Accounts.call('POST', '/api/support/reply', { id: ticketId(), body: Accounts.value('reply-body') }, true).then(function (r) {
+    if (r.status === 200) {
+      document.getElementById('reply').reset();
+      Accounts.say('reply-result', 'Sent. The ticket is open again.');
+      return load();
+    }
+    if (r.status === 401) { showSignedOut('You are signed out. Sign in again.'); return; }
+    Accounts.say('reply-result', r.body.error || ('Not sent (' + r.status + ').'));
+  });
+});
+
+load();
+</script>
+</body>
+</html>

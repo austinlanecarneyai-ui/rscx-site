@@ -11,13 +11,16 @@
 <script src="accounts.js"></script>
 </head>
 <body>
-<p><a href="index.html">RS Classic Continuum accounts</a> | <a href="signup.html">Create account</a> | <a href="signin.html">Sign in</a> | <a href="account.html">My account</a> | <a href="forgot.html">Forgot password</a> | <a href="privacy.html">Privacy</a></p>
+<p><a href="index.html">RS Classic Continuum accounts</a> | <a href="signup.html">Create account</a> | <a href="signin.html">Sign in</a> | <a href="account.html">My account</a> | <a href="forgot.html">Forgot password</a> | <a href="inbox.html">Inbox</a> | <a href="tickets.html">Support</a> | <a href="privacy.html">Privacy</a></p>
 <hr>
 <h1>My account</h1>
 <p id="status" role="status">Loading...</p>
 
 <div id="signedin" hidden>
   <p id="banner" role="alert" hidden></p>
+  <!-- LCH-071: a new confirmation link, for an email not confirmed yet. -->
+  <p id="resend-row" hidden><button id="resend" type="button">Resend confirmation email</button></p>
+  <p id="resend-result" role="status"></p>
   <table border="1" cellpadding="4">
     <tr><th align="left">Character</th><td id="f-name"></td></tr>
     <tr><th align="left">Combat level</th><td id="f-combat"></td></tr>
@@ -27,6 +30,39 @@
     <tr><th align="left">Email</th><td id="f-email"></td></tr>
     <tr id="sub-row"><th align="left">Subscription</th><td id="f-sub"></td></tr>
   </table>
+
+  <!-- PAY-071: shown only when payments are on and answer for this character. -->
+  <div id="pay-manage" hidden>
+    <h2>Your subscription</h2>
+    <p id="pay-failing" role="alert" hidden></p>
+    <p id="pay-renews"></p>
+    <p id="pay-card"></p>
+    <p><button id="pay-change-card" type="button">Change card</button>
+       <button id="pay-cancel" type="button">Cancel renewal</button>
+       <button id="pay-resume" type="button">Turn renewal back on</button></p>
+    <!-- PAY-106. Wording approved by the owner 2026-11-04. -->
+    <p id="pay-refund"><small>Need a refund or think you were charged by mistake? <a href="tickets.html">Lodge a ticket</a>
+       first, as a chargeback through your bank may lead to a permanent ban. <a href="terms.html#refunds">Refund terms</a></small></p>
+    <form id="pay-day">
+      <p><label>Charge day<br><select id="pay-day-value"></select></label>
+         <button type="submit">Save charge day</button></p>
+      <p><small>Each payment adds one month to your subscription. A day that has already passed this month is charged now.</small></p>
+    </form>
+    <p id="pay-result" role="status"></p>
+  </div>
+
+  <!-- INB-016: shown only when the server has the inbox (the API answers 404 without it). -->
+  <div id="inbox" hidden>
+    <h2>Inbox</h2>
+    <p><a href="inbox.html" id="inbox-link">Inbox</a> <span id="inbox-count"></span></p>
+  </div>
+
+  <!-- TKT-021: shown only when the server has support tickets (the API answers 404 without them). -->
+  <div id="support" hidden>
+    <h2>Support</h2>
+    <p id="support-count"></p>
+    <p><a href="tickets.html" id="support-link">Your tickets, or lodge a ticket</a></p>
+  </div>
 
   <h2>Change password</h2>
   <form id="password">
@@ -95,7 +131,9 @@ function load() {
     }
 
     // LCH-019: a character with no email, or one never confirmed, is told why it matters.
+    // LCH-068: a website sign-up cannot play until it is confirmed (a.canPlay false), and is told so.
     var banner = document.getElementById('banner');
+    document.getElementById('resend-row').hidden = !(a.email && !a.emailVerified && Accounts.mail());
     if (!a.email) {
       banner.textContent = 'Add an email so you can reset your password.';
       banner.hidden = false;
@@ -103,8 +141,12 @@ function load() {
     } else if (!a.emailVerified && !Accounts.mail()) {
       banner.hidden = true;
       Accounts.say('email-heading', 'Change email');
+    } else if (!a.emailVerified && a.canPlay === false) {
+      banner.textContent = 'Your email is not confirmed yet. Confirm it before you play: open the link we sent, or resend it.';
+      banner.hidden = false;
+      Accounts.say('email-heading', 'Change email');
     } else if (!a.emailVerified) {
-      banner.textContent = 'Your email is not confirmed yet. Open the link we sent, or save it again below to send a new link.';
+      banner.textContent = 'Your email is not confirmed yet. Open the link we sent, or resend it.';
       banner.hidden = false;
       Accounts.say('email-heading', 'Change email');
     } else {
@@ -113,8 +155,91 @@ function load() {
     }
     document.getElementById('signedin').hidden = false;
     document.getElementById('signedout').hidden = true;
+    return loadPay().then(loadInbox).then(loadSupport);
   });
 }
+
+// INB-016: the unread count. A server without the inbox answers 404 and the section stays hidden.
+function loadInbox() {
+  return Accounts.call('GET', '/api/inbox', undefined, true).then(function (r) {
+    var box = document.getElementById('inbox');
+    box.hidden = r.status !== 200;
+    if (r.status !== 200) { return; }
+    var n = r.body.unread;
+    Accounts.say('inbox-count', n ? '(' + n + ' unread)' : '(nothing unread)');
+  });
+}
+
+// TKT-021: how many of the character's tickets wait for them. A server without tickets answers 404.
+function loadSupport() {
+  return Accounts.call('GET', '/api/support/tickets', undefined, true).then(function (r) {
+    var box = document.getElementById('support');
+    box.hidden = r.status !== 200;
+    if (r.status !== 200) { return; }
+    var waiting = r.body.tickets.filter(function (t) { return t.yourTurn; }).length;
+    var open = r.body.tickets.filter(function (t) { return t.status !== 'resolved'; }).length;
+    Accounts.say('support-count', waiting ? waiting + ' of your tickets ' + (waiting === 1 ? 'has' : 'have') + ' a reply waiting for you.'
+      : open ? 'You have ' + open + ' open ticket' + (open === 1 ? '' : 's') + '.' : 'Need help? Lodge a ticket.');
+  });
+}
+
+// PAY-071: renewal, card, charge day. A server without payments answers 404 and the block stays hidden.
+var payDay = document.getElementById('pay-day-value');
+for (var d = 1; d <= 31; d++) {
+  var o = document.createElement('option');
+  o.value = d; o.textContent = d;
+  payDay.appendChild(o);
+}
+
+function showPay(s) {
+  var box = document.getElementById('pay-manage');
+  box.hidden = !(s.subscriber || s.hasCard);
+  var failing = document.getElementById('pay-failing');
+  failing.hidden = !s.failing;
+  failing.textContent = s.failing ? 'Your last payment did not go through (' + s.lastError + '). Change your card before '
+    + Accounts.date(s.subscribedUntil) + ' to stay a subscriber.' : '';
+  Accounts.say('pay-renews', s.autoRenew
+    ? 'Renews automatically. Next payment: ' + Accounts.date(s.nextChargeAt) + ', US$12.'
+    : (s.subscriber ? 'Does not renew. Ends ' + Accounts.date(s.subscribedUntil) + '.' : 'Ended.'));
+  Accounts.say('pay-card', s.card ? 'Card: ' + s.card : '');
+  document.getElementById('pay-cancel').hidden = !s.autoRenew;
+  document.getElementById('pay-resume').hidden = s.autoRenew || !s.subscriber || !s.hasCard;
+  document.getElementById('pay-change-card').hidden = !s.hasCard;
+  document.getElementById('pay-day').hidden = !s.autoRenew;
+  if (s.chargeDay) { payDay.value = s.chargeDay; }
+}
+
+function loadPay() {
+  return Accounts.call('GET', '/api/pay/status', undefined, true).then(function (r) {
+    if (r.status === 200) { showPay(r.body); }
+  });
+}
+
+function paySettings(body, words) {
+  return Accounts.call('POST', '/api/pay/settings', body, true).then(function (r) {
+    if (r.status === 200) { showPay(r.body); }
+    Accounts.say('pay-result', r.status === 200 ? words : (r.body.error || ('Failed (' + r.status + ').')));
+  });
+}
+
+document.getElementById('pay-cancel').addEventListener('click', function () {
+  paySettings({ autoRenew: false }, 'Renewal cancelled. You stay a subscriber until the end of your paid month.');
+});
+document.getElementById('pay-resume').addEventListener('click', function () {
+  paySettings({ autoRenew: true }, 'Renewal is back on.');
+});
+Accounts.onSubmit('pay-day', function () {
+  return paySettings({ chargeDay: parseInt(payDay.value, 10) }, 'Charge day saved.');
+});
+document.getElementById('pay-change-card').addEventListener('click', function () {
+  Accounts.call('POST', '/api/pay/card', {}, true).then(function (r) {
+    if (r.status === 200 && r.body.url && r.body.url.indexOf('https://') === 0) {
+      window.location.href = r.body.url;
+      return;
+    }
+    Accounts.say('pay-result', r.body.error || ('Could not open the card page (' + r.status + ').'));
+  });
+});
 
 Accounts.onSubmit('password', function () {
   if (Accounts.value('new1') !== Accounts.value('new2')) {
@@ -130,11 +255,25 @@ Accounts.onSubmit('password', function () {
   });
 });
 
+// LCH-071: once a minute, 5 a day; the new link replaces the last one.
+document.getElementById('resend').addEventListener('click', function () {
+  var button = document.getElementById('resend');
+  button.disabled = true;
+  Accounts.say('resend-result', 'Sending...');
+  Accounts.call('POST', '/api/resend-verify', {}, true).then(function (r) {
+    button.disabled = false;
+    Accounts.say('resend-result', r.status === 200
+      ? (r.body.emailSent ? 'Sent. Check your inbox.' : 'It could not be sent. Try again later.')
+      : (r.body.error || ('Failed (' + r.status + ').')));
+  });
+});
+
 Accounts.onSubmit('email', function () {
   return Accounts.call('POST', '/api/email',
     { email: Accounts.value('email-new'), current: Accounts.value('email-current') }, true).then(function (r) {
     Accounts.say('email-result', r.status === 200
       ? (r.body.emailSent ? 'Saved. We sent a confirmation link to the new address.'
+           + (r.body.canPlay === false ? ' Confirm it before you play again.' : '')
          : !Accounts.mail() ? 'Saved. Email confirmation opens soon.'
                             : 'Saved, but the confirmation email could not be sent. Try again later.')
       : (r.body.error || ('Failed (' + r.status + ').')));

@@ -11,17 +11,203 @@
 <script src="accounts.js"></script>
 </head>
 <body>
-<p><a href="index.html">RS Classic Continuum accounts</a> | <a href="signup.html">Create account</a> | <a href="signin.html">Sign in</a> | <a href="account.html">My account</a> | <a href="forgot.html">Forgot password</a> | <a href="privacy.html">Privacy</a></p>
+<p><a href="index.html">RS Classic Continuum accounts</a> | <a href="signup.html">Create account</a> | <a href="signin.html">Sign in</a> | <a href="account.html">My account</a> | <a href="forgot.html">Forgot password</a> | <a href="inbox.html">Inbox</a> | <a href="tickets.html">Support</a> | <a href="privacy.html">Privacy</a></p>
 <hr>
 <h1>Subscribe</h1>
-<p>$12 a month.</p>
-<h2>What subscribers get</h2>
+<p><b>$12 a month.</b> Monthly only.</p>
+<p>A service, not a shortcut. Free players get every story quest, every portal and raid, and all the gear.</p>
+
+<h2>Free and subscriber</h2>
+<table border="1" cellpadding="4" id="compare">
+  <tr><th align="left"></th><th align="left">Free</th><th align="left">Subscriber</th></tr>
+  <tr><th align="left">XP rate</th><td>8x, 11x for skills in the Wilderness</td><td>Weekend bonus XP</td></tr>
+  <tr><th align="left">Story quests</th><td>All</td><td>All</td></tr>
+  <tr><th align="left">Portals, raids, events</th><td>Yes</td><td>Yes</td></tr>
+  <tr><th align="left">All gear, all areas</th><td>Yes</td><td>Yes</td></tr>
+  <tr><th align="left">Quest Guide</th><td>-</td><td>Yes</td></tr>
+  <tr><th align="left">Daily and weekly quests</th><td>-</td><td>Yes, with rewards</td></tr>
+  <tr><th align="left">Estate and Carpentry</th><td>-</td><td>Your own estate</td></tr>
+  <tr><th align="left">Estate decorations</th><td>-</td><td>Extra catalogue</td></tr>
+  <tr><th align="left">Clans</th><td>Join</td><td>Found and lead</td></tr>
+  <tr><th align="left">Bank</th><td>Standard</td><td>Bigger, yours to keep</td></tr>
+  <tr><th align="left">Full world</th><td>Queue</td><td>Priority login</td></tr>
+  <tr><th align="left">Chat</th><td>-</td><td>Subscriber mark</td></tr>
+  <tr><th align="left">Botting</th><td>1 hour a day</td><td>1 hour a day</td></tr>
+</table>
+
+<h2>Bonus XP</h2>
+<p>Weekdays are the same for everyone. Weekend rates are for subscribers; free players keep the weekday rates.</p>
+<table border="1" cellpadding="4" id="bonus-xp">
+  <tr><th align="left"></th><th align="left">Overworld</th><th align="left">Wilderness</th></tr>
+  <tr><th align="left">Weekday skills</th><td>8x</td><td>11x</td></tr>
+  <tr><th align="left">Weekday combat</th><td>8x</td><td>8x</td></tr>
+  <tr><th align="left">Weekend skills</th><td>11x</td><td>15x</td></tr>
+  <tr><th align="left">Weekend combat</th><td>11x</td><td>11x</td></tr>
+</table>
+<p>Combat is Attack, Defense, Strength, Hits, Ranged, Prayer and Magic. Weekends are Saturday and Sunday, server time.</p>
+
+<h2>If you stop</h2>
 <ul>
-  <li>(Benefits to be decided.)</li>
+  <li>Your estate is locked as it is. Come back within 90 days and it is all there. After 90 days the plot is released and your furniture and materials go to your bank. You are warned 30 and 7 days before.</li>
+  <li>The bigger bank is yours to keep, and everything in it.</li>
+  <li>Your Carpentry level is kept. You cannot train it until you come back.</li>
+  <li>A clan you founded carries on as it is.</li>
+  <li>Rewards you have claimed are yours. Unclaimed ones expire. Your title stays, but cannot be changed.</li>
+  <li>The Quest Guide, bonus XP, daily and weekly quests, the chat mark and priority login stop until you come back.</li>
 </ul>
-<p><button id="subscribe-now" type="button" disabled>Subscribe now</button></p>
+
+<h2>Pay</h2>
+<p id="pay-status" role="status"></p>
+<!-- PAY-105: shown on the way back from Checkout (?paid=1) only once /api/pay/status confirms; never before. -->
+<div id="thanks" hidden>
+  <h2 id="thanks-head">Thank you!</h2>
+  <p><b>Welcome to the subscribers.</b> Your benefits are live in game right now, until <b id="thanks-until"></b>.</p>
+  <p>You've just made a real difference. Your support keeps the servers running, pays for the things that make the
+     game safer and smoother, and helps us build the world we've dreamed of sharing with you. We're genuinely
+     grateful to have you with us.</p>
+  <p>Log in and enjoy it. We'll see you out there!</p>
+  <p>A receipt is on its way to your email. You can manage your subscription any time in your
+     <a href="account.html">account</a>.</p>
+</div>
+<p id="pay-late" hidden>Thank you! Your payment is still on its way to us, which sometimes takes a little longer.
+There's no need to pay again: your account will update by itself. If it hasn't within an hour,
+<a href="tickets.html">lodge a ticket</a> in your account and we'll sort it out straight away.</p>
+<!-- PAY-021..025. The waiver wording is version waiver-2026-11-03 (PayConfig.WAIVER_VERSION): change both together. -->
+<form id="checkout">
+  <p><label><input type="checkbox" id="auto" checked> Renew automatically each month</label></p>
+  <p id="day-row"><label>Charge day<br><select id="day"></select></label><br>
+     <small id="day-hint">Any day of the month. Each payment adds one month to your subscription, so paying early never loses days.</small></p>
+  <!-- PAY-104. Wording approved by the owner 2026-11-04. LESSONS F18: never "no refunds" on its own. -->
+  <fieldset id="before-pay">
+    <legend>Before you pay</legend>
+    <ul>
+      <li>We don't offer change-of-mind refunds. Cancel renewal at any time on My account, and you keep your days until they run out.</li>
+      <li>If something goes wrong, <b>lodge a ticket</b> in your account first. We review every request and will put a genuine mistake right.</li>
+      <li>A refund or chargeback can end your subscriber benefits at once, and may reverse what you unlocked with them.</li>
+      <li>A chargeback filed without contacting us first may lead to a permanent ban.</li>
+    </ul>
+    <p>This does not affect your rights under consumer law.</p>
+    <p><a href="terms.html#refunds" id="refund-terms">Refund and chargeback terms</a></p>
+  </fieldset>
+  <p><label><input type="checkbox" id="terms" required> I agree to the <a href="terms.html">Terms of Service</a>.</label></p>
+  <p><label><input type="checkbox" id="waiver" required> Start my month now. I understand that once it starts I lose the 14-day right to cancel and get my money back.</label></p>
+  <p>This does not affect your other rights under consumer law.</p>
+  <p id="summary"></p>
+  <p><button id="subscribe-now" type="submit" disabled>Subscribe now</button></p>
+</form>
 <p id="note">Payments are not set up yet. This button will open the payment page once they are.</p>
-<p><a href="account.html">Back to my account</a></p>
+<p><small>US$12 a month, the same everywhere; any VAT is included. Card payments are taken by Stripe; we never see your card.
+Sold by RS Classic Continuum, [PO BOX], [SUPPORT EMAIL]. ABN [ABN].</small></p>
+<p><a href="account.html">Back to my account</a> | <a href="terms.html">Terms of Service</a></p>
 <pre id="errors" hidden></pre>
+<script>
+(function () {
+  var form = document.getElementById('checkout');
+  var button = document.getElementById('subscribe-now');
+  var day = document.getElementById('day');
+  for (var d = 1; d <= 31; d++) {
+    var o = document.createElement('option');
+    o.value = d; o.textContent = d;
+    day.appendChild(o);
+  }
+  function summary() {
+    var renew = document.getElementById('auto').checked;
+    document.getElementById('day-row').hidden = !renew;
+    Accounts.say('summary', renew
+      ? 'US$12 now, then US$12 on day ' + day.value + ' of each month until you cancel.'
+      : 'US$12 for one month. It does not renew.');
+  }
+  document.getElementById('auto').addEventListener('change', summary);
+  day.addEventListener('change', summary);
+
+  function off(words) {
+    button.disabled = true;
+    if (words) { Accounts.say('pay-status', words); }
+  }
+
+  // Coming back from Stripe proves nothing: only the server, told by Stripe, says it is paid (PAY-105).
+  // The page notes the date it had before leaving for Checkout, so an early payment by a subscriber is
+  // confirmed by the date moving, not by the subscription it already had.
+  var paid = /[?&]paid=1/.test(window.location.search);
+  var BEFORE = 'rscx-pay-before';
+  var before = null;
+  try { var b = sessionStorage.getItem(BEFORE); before = b === null ? null : parseInt(b, 10); } catch (e) { before = null; }
+  var last = null;
+
+  function confirmed(s) {
+    return !!s.subscriber && (before === null || isNaN(before) || s.subscribedUntil > before);
+  }
+
+  function thanks(s) {
+    try { sessionStorage.removeItem(BEFORE); } catch (e) { /* nothing kept */ }
+    Accounts.say('pay-status', '');
+    Accounts.say('thanks-until', Accounts.date(s.subscribedUntil));
+    document.getElementById('thanks').hidden = false;
+    // The name only if the account reply has it; the thank-you never waits for it.
+    return Accounts.call('GET', '/api/account', undefined, true).then(function (r) {
+      if (r.status === 200 && r.body && typeof r.body.name === 'string' && r.body.name) {
+        Accounts.say('thanks-head', 'Thank you, ' + r.body.name + '!');
+      }
+    }, function () { /* keeps "Thank you!" */ });
+  }
+
+  function load(tries) {
+    if (!Accounts.token()) { off(''); return Promise.resolve(); }
+    return Accounts.call('GET', '/api/pay/status', undefined, true).then(function (r) {
+      if (r.status === 401) { off('Sign in to subscribe.'); return; }
+      if (r.status !== 200) { off(''); return; }  // payments are off: the placeholder stays
+      var s = r.body;
+      last = s;
+      document.getElementById('note').hidden = true;
+      if (paid) {
+        form.hidden = true;  // never a second Pay button while the first payment is on its way
+        if (confirmed(s)) { return thanks(s); }
+        if (tries > 0) {
+          Accounts.say('pay-status', 'Confirming your payment...');
+          return new Promise(function (ok) { setTimeout(ok, 3000); }).then(function () { return load(tries - 1); });
+        }
+        Accounts.say('pay-status', '');
+        document.getElementById('pay-late').hidden = false;
+        return;
+      }
+      if (s.subscriber) {
+        Accounts.say('pay-status', 'You are a subscriber until ' + Accounts.date(s.subscribedUntil)
+          + (s.autoRenew ? '. Next payment: ' + Accounts.date(s.nextChargeAt) + '.' : '. It does not renew.'));
+      } else {
+        Accounts.say('pay-status', '');
+      }
+      if (!s.mayPay) {
+        form.hidden = true;
+        Accounts.say('pay-status', document.getElementById('pay-status').textContent
+          + ' You can pay for your next month from ' + Accounts.date(s.payOpensAt) + '.');
+        return;
+      }
+      day.value = s.defaultChargeDay || 1;
+      summary();
+      button.disabled = false;
+    });
+  }
+
+  Accounts.onSubmit('checkout', function () {
+    var renew = document.getElementById('auto').checked;
+    return Accounts.call('POST', '/api/pay/checkout', {
+      autoRenew: renew,
+      chargeDay: renew ? parseInt(day.value, 10) : 0,
+      terms: document.getElementById('terms').checked,
+      waiver: document.getElementById('waiver').checked
+    }, true).then(function (r) {
+      if (r.status === 200 && r.body.url && r.body.url.indexOf('https://') === 0) {
+        try { sessionStorage.setItem(BEFORE, String(last ? last.subscribedUntil || 0 : 0)); } catch (e) { /* none kept */ }
+        window.location.href = r.body.url;
+        return;
+      }
+      Accounts.say('pay-status', r.body.error || ('Could not open the payment page (' + r.status + ').'));
+    });
+  });
+
+  summary();
+  load(40);  // 40 tries 3 s apart: about two minutes before the still-on-its-way words
+})();
+</script>
 </body>
 </html>
